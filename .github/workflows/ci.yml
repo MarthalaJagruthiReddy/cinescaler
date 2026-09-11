@@ -26,3 +26,31 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm run typecheck
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cinescaler
+          POSTGRES_PASSWORD: cinescaler
+          POSTGRES_DB: cinescaler
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cinescaler -d cinescaler"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://cinescaler:cinescaler@localhost:5432/cinescaler
+      CINESCALER_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: pytest -q backend/tests/test_postgres_integration.py
