@@ -80,6 +80,17 @@ DATABASE_URL=postgresql+psycopg://cinescaler:cinescaler@localhost:5432/cinescale
 pytest -q backend/tests/test_postgres_integration.py
 ```
 
+## Reproducible load measurement
+
+The [GitHub Actions benchmark run](https://github.com/MarthalaJagruthiReddy/cinescaler/actions/runs/34620889499) used PostgreSQL 16, 20 concurrent clients, 250 telemetry requests, and 250 recommendation requests:
+
+| Endpoint | Throughput | p50 / p95 / p99 latency | Errors |
+| --- | ---: | ---: | ---: |
+| `POST /api/v1/sessions/:id/telemetry` | 297.57 requests/sec | 65.55 / 72.68 / 76.30 ms | 0 / 250 |
+| `GET /api/v1/sessions/:id/recommendation` | 1,234.61 requests/sec | 15.71 / 16.28 / 16.84 ms | 0 / 250 |
+
+These are measurements from that CI runner and workload, not production capacity guarantees. Re-run the benchmark workflow before comparing code changes.
+
 ## Repository layout
 
 ```text
@@ -93,4 +104,4 @@ docker-compose.yml PostgreSQL and API services
 
 - Add offline trace replay and comparisons against configurable baseline policies.
 - Add model versioning and rollback for online updates.
-- Add retention and partitioning strategies for high-volume telemetry.
+- Add retention and partitioning strategies for high-volume telemetry, then repeat the benchmark at larger volumes.
