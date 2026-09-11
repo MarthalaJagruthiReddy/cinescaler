@@ -1,0 +1,15 @@
+{
+  "name": "cinescaler",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "build": "npm run build --workspace=frontend",
+    "dev": "npm run dev --workspace=frontend"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

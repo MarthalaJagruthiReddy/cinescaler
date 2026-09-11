@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cinescaler
+      POSTGRES_PASSWORD: cinescaler
+      POSTGRES_DB: cinescaler
+    volumes:
+      - cinescaler-postgres:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://cinescaler:cinescaler@postgres:5432/cinescaler
+    volumes:
+      - cinescaler-data:/app
+    depends_on:
+      - postgres
+
+volumes:
+  cinescaler-data:
+  cinescaler-postgres:
