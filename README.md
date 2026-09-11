@@ -69,9 +69,16 @@ npm run dev
 ```bash
 pytest -q backend/tests
 npm run build
+npm run typecheck
 ```
 
-The backend tests cover telemetry idempotency, recommendations, model updates, analytics, and WebSocket-related service behavior. The GitHub Actions workflow runs the backend tests and frontend build.
+The backend tests cover telemetry idempotency, recommendations, model updates, analytics, and WebSocket-related service behavior. The GitHub Actions workflow also runs a PostgreSQL API round-trip integration test. With PostgreSQL running locally, execute it with:
+
+```bash
+CINESCALER_INTEGRATION=1 \
+DATABASE_URL=postgresql+psycopg://cinescaler:cinescaler@localhost:5432/cinescaler \
+pytest -q backend/tests/test_postgres_integration.py
+```
 
 ## Repository layout
 
