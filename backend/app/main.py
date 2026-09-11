@@ -4,6 +4,8 @@ import asyncio
 import time
 import uuid
 from collections import defaultdict
+from datetime import datetime
+from threading import Lock
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response, WebSocket, WebSocketDisconnect, status
@@ -14,8 +16,8 @@ from sqlalchemy.orm import Session
 from .db import Base, build_engine, build_session_factory, session_dependency
 from .metrics import recommendation_latency, recommendations_served, telemetry_events_ingested
 from .ml.model import QoEModel
-from .models import PlaybackSession, TelemetryEvent
-from .schemas import Recommendation, SessionCreate, SessionRead, Summary, TelemetryBatch
+from .models import ModelSnapshot, PlaybackSession, TelemetryEvent
+from .schemas import ModelRetrainResponse, ModelStatus, Recommendation, SessionCreate, SessionRead, Summary, TelemetryBatch
 
 
 class ConnectionManager:
@@ -45,7 +47,13 @@ def create_app(database_url: str | None = None, model: QoEModel | None = None) -
     Base.metadata.create_all(engine)
     factory = build_session_factory(engine)
     abr_model = model or QoEModel()
+    if model is None:
+        with factory() as bootstrap_session:
+            snapshot = bootstrap_session.scalar(select(ModelSnapshot).order_by(ModelSnapshot.version.desc()))
+            if snapshot:
+                abr_model.restore(snapshot.version, snapshot.weights, snapshot.trained_samples, snapshot.metrics, snapshot.created_at)
     manager = ConnectionManager()
+    retrain_lock = Lock()
     app = FastAPI(title="CineScaler API", version="0.1.0", description="Telemetry-driven adaptive bitrate experimentation.")
     app.state.engine = engine
     app.state.session_factory = factory
@@ -110,12 +118,31 @@ def create_app(database_url: str | None = None, model: QoEModel | None = None) -
         label = "Ultra HD" if prediction.bitrate_mbps >= 8 else "Full HD" if prediction.bitrate_mbps >= 5 else "HD" if prediction.bitrate_mbps >= 3 else "SD"
         return Recommendation(bitrate_mbps=prediction.bitrate_mbps, quality_label=label, predicted_rebuffer_risk=round(prediction.risk, 4), confidence=round(1 - prediction.risk, 4), rationale=f"Selected the highest tested profile under the 35% predicted rebuffer threshold for {throughput_mbps:.1f} Mbps throughput and {buffer_seconds:.1f}s buffer.")
 
-    @app.post("/api/v1/model/retrain")
+    @app.get("/api/v1/model/status", response_model=ModelStatus)
+    def model_status():
+        return abr_model.status()
+
+    @app.post("/api/v1/model/retrain", response_model=ModelRetrainResponse)
     def retrain_model(session: Session = Depends(get_session)):
         events = list(session.scalars(select(TelemetryEvent)))
         samples = [{"throughput_mbps": event.throughput_mbps, "buffer_seconds": event.buffer_seconds, "latency_ms": event.latency_ms, "bitrate_mbps": event.bitrate_mbps, "rebuffered": event.rebuffered} for event in events]
-        abr_model.retrain(samples)
-        return {"samples": len(samples), "weights": [round(weight, 5) for weight in abr_model.weights]}
+        if not samples:
+            return {**abr_model.status(), "training_samples": 0, "evaluation_samples": 0}
+        with retrain_lock:
+            holdout_size = max(1, len(samples) // 5) if len(samples) >= 5 else 0
+            training_samples = samples[:-holdout_size] if holdout_size else samples
+            evaluation_samples = samples[-holdout_size:] if holdout_size else samples
+            candidate = abr_model.clone()
+            candidate.retrain(training_samples)
+            candidate.version = abr_model.version + 1
+            candidate.trained_samples = len(training_samples)
+            candidate.last_metrics = candidate.evaluate(evaluation_samples)
+            candidate.last_trained_at = datetime.utcnow()
+            with factory() as registry_session:
+                registry_session.add(ModelSnapshot(version=candidate.version, weights=candidate.weights, trained_samples=candidate.trained_samples, metrics=candidate.last_metrics, created_at=candidate.last_trained_at))
+                registry_session.commit()
+            abr_model.restore(candidate.version, candidate.weights, candidate.trained_samples, candidate.last_metrics, candidate.last_trained_at)
+            return {**abr_model.status(), "training_samples": len(training_samples), "evaluation_samples": len(evaluation_samples)}
 
     @app.get("/api/v1/analytics/summary", response_model=Summary)
     def summary(session: Session = Depends(get_session)):
