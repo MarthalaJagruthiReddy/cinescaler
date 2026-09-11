@@ -20,6 +20,7 @@ The model is intentionally small and explainable: features, weights, risk, and t
 - Batch telemetry ingestion with idempotent event IDs.
 - PostgreSQL persistence for playback sessions and telemetry events.
 - Online logistic model with explicit features and inspectable weights.
+- Persistent model registry with versioned checkpoints and holdout evaluation metrics.
 - Policy layer that separates risk prediction from bitrate selection.
 - WebSocket updates for live session dashboards.
 - Analytics summary for throughput, bitrate, rebuffer rate, and latency.
@@ -59,6 +60,7 @@ npm run dev
 | `POST` | `/api/v1/sessions/:id/telemetry` | Ingest a batch of playback events |
 | `GET` | `/api/v1/sessions/:id/recommendation` | Get a quality recommendation |
 | `POST` | `/api/v1/model/retrain` | Retrain the online model from stored events |
+| `GET` | `/api/v1/model/status` | Read the active model version and evaluation metadata |
 | `GET` | `/api/v1/analytics/summary` | Read aggregate playback statistics |
 | `WS` | `/ws/sessions/:id` | Stream live session updates |
 | `GET` | `/healthz` | Check database connectivity and service health |
@@ -72,7 +74,7 @@ npm run build
 npm run typecheck
 ```
 
-The backend tests cover telemetry idempotency, recommendations, model updates, analytics, and WebSocket-related service behavior. The GitHub Actions workflow also runs a PostgreSQL API round-trip integration test. With PostgreSQL running locally, execute it with:
+The backend tests cover telemetry idempotency, recommendations, model updates, versioned retraining and restore behavior, analytics, and WebSocket-related service behavior. The GitHub Actions workflow also runs a PostgreSQL API round-trip integration test. With PostgreSQL running locally, execute it with:
 
 ```bash
 CINESCALER_INTEGRATION=1 \
@@ -103,5 +105,5 @@ docker-compose.yml PostgreSQL and API services
 ## Next steps
 
 - Add offline trace replay and comparisons against configurable baseline policies.
-- Add model versioning and rollback for online updates.
+- Add rollback and side-by-side comparison endpoints for stored model versions.
 - Add retention and partitioning strategies for high-volume telemetry, then repeat the benchmark at larger volumes.
