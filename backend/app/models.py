@@ -29,3 +29,13 @@ class TelemetryEvent(Base):
     rebuffered: Mapped[bool] = mapped_column(Boolean, default=False)
     event_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ModelSnapshot(Base):
+    __tablename__ = "model_snapshots"
+
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    weights: Mapped[list[float]] = mapped_column(JSON)
+    trained_samples: Mapped[int] = mapped_column(Integer, default=0)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
