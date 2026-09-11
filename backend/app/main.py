@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response, WebSocket, WebSocketDisconnect, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from sqlalchemy import func, select, text
+from sqlalchemy import Integer, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from .db import Base, build_engine, build_session_factory, session_dependency
@@ -123,7 +123,7 @@ def create_app(database_url: str | None = None, model: QoEModel | None = None) -
         sessions = session.scalar(select(func.count(PlaybackSession.id))) or 0
         if not event_count:
             return Summary(sessions=sessions, events=0, average_throughput_mbps=0, average_bitrate_mbps=0, rebuffer_rate=0, average_latency_ms=0)
-        averages = session.execute(select(func.avg(TelemetryEvent.throughput_mbps), func.avg(TelemetryEvent.bitrate_mbps), func.avg(TelemetryEvent.latency_ms), func.avg(TelemetryEvent.rebuffered))).one()
+        averages = session.execute(select(func.avg(TelemetryEvent.throughput_mbps), func.avg(TelemetryEvent.bitrate_mbps), func.avg(TelemetryEvent.latency_ms), func.avg(cast(TelemetryEvent.rebuffered, Integer)))).one()
         return Summary(sessions=sessions, events=event_count, average_throughput_mbps=round(float(averages[0] or 0), 3), average_bitrate_mbps=round(float(averages[1] or 0), 3), rebuffer_rate=round(float(averages[3] or 0), 3), average_latency_ms=round(float(averages[2] or 0), 3))
 
     @app.websocket("/ws/sessions/{session_id}")
