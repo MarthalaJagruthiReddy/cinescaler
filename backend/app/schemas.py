@@ -46,3 +46,15 @@ class Summary(BaseModel):
     average_bitrate_mbps: float
     rebuffer_rate: float
     average_latency_ms: float
+
+
+class ModelStatus(BaseModel):
+    version: int
+    trained_samples: int
+    metrics: dict[str, float]
+    last_trained_at: datetime | None
+
+
+class ModelRetrainResponse(ModelStatus):
+    training_samples: int
+    evaluation_samples: int
