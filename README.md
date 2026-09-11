@@ -1,38 +1,89 @@
 # CineScaler
 
-CineScaler is an adaptive streaming lab. A playback client sends throughput, buffer, latency, bitrate, and rebuffer events; an online logistic model updates from those observations and recommends the highest quality profile below a predicted rebuffer-risk threshold.
+CineScaler is a telemetry-driven adaptive streaming service. A playback client sends throughput, buffer, latency, bitrate, and rebuffer events; an online QoE model learns from those observations and recommends the highest quality profile below a predicted rebuffer-risk threshold.
 
-## Engineering signals
+## Architecture
+
+```mermaid
+flowchart TD
+    Player["Playback client"] --> API["FastAPI service"]
+    API --> DB["PostgreSQL sessions and telemetry"]
+    API --> Model["Online QoE model and bitrate policy"]
+    API --> WS["WebSocket dashboard stream"]
+    UI["React dashboard"] --> API
+```
+
+The model is intentionally small and explainable: features, weights, risk, and the final bitrate decision are inspectable. The service is designed as an experimentation platform rather than a replacement for a production-scale commercial ABR stack.
+
+## Features
 
 - Batch telemetry ingestion with idempotent event IDs.
-- PostgreSQL persistence for sessions and time-series-like event data.
-- Explainable online learning with explicit features and inspectable weights.
-- A policy layer separates prediction from the bitrate decision.
-- WebSocket channel for live dashboard updates.
-- Prometheus latency and throughput metrics plus an analytics summary endpoint.
+- PostgreSQL persistence for playback sessions and telemetry events.
+- Online logistic model with explicit features and inspectable weights.
+- Policy layer that separates risk prediction from bitrate selection.
+- WebSocket updates for live session dashboards.
+- Analytics summary for throughput, bitrate, rebuffer rate, and latency.
+- Prometheus metrics for telemetry ingestion and recommendation latency.
 
-The model is intentionally small and explainable. It is a portfolio system, not a claim that a five-profile simulator reproduces Netflix's production ABR stack.
+## Technology
 
-## Run
+- Frontend: React, TypeScript, Vite
+- API: Python, FastAPI, Pydantic, SQLAlchemy
+- Model: online logistic QoE model with a threshold-based bitrate policy
+- Storage: PostgreSQL
+- Operations: Docker Compose, GitHub Actions, WebSockets, Prometheus metrics
+
+## Getting started
+
+### Start the services
 
 ```bash
 npm install
 docker compose up --build
 ```
 
-Open `http://localhost:8003/docs`. Run the frontend with:
+The API is available at `http://localhost:8003`. FastAPI documentation is available at `http://localhost:8003/docs`, and metrics are exposed at `http://localhost:8003/metrics`.
+
+### Start the frontend
 
 ```bash
 npm run dev
 ```
 
-## Interview discussion
+## API surface
 
-1. Why should telemetry ingestion be idempotent when a player reconnects?
-2. What is the difference between the model's predicted risk and the policy's chosen bitrate?
-3. How would you partition and retain billions of playback events?
-4. How would you run an A/B test against a baseline ABR algorithm without harming users?
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/sessions` | Create a playback session |
+| `GET` | `/api/v1/sessions` | List recent playback sessions |
+| `POST` | `/api/v1/sessions/:id/telemetry` | Ingest a batch of playback events |
+| `GET` | `/api/v1/sessions/:id/recommendation` | Get a quality recommendation |
+| `POST` | `/api/v1/model/retrain` | Retrain the online model from stored events |
+| `GET` | `/api/v1/analytics/summary` | Read aggregate playback statistics |
+| `WS` | `/ws/sessions/:id` | Stream live session updates |
+| `GET` | `/healthz` | Check database connectivity and service health |
+| `GET` | `/metrics` | Export Prometheus metrics |
 
-## Honest benchmark plan
+## Validation
 
-Generate identical bandwidth traces, compare a fixed-bitrate baseline with the model policy, and report rebuffer ratio, average delivered bitrate, bitrate-switch count, p95 recommendation latency, and cold-start behavior. Use confidence intervals before putting a number on the resume.
+```bash
+pytest -q backend/tests
+npm run build
+```
+
+The backend tests cover telemetry idempotency, recommendations, model updates, analytics, and WebSocket-related service behavior. The GitHub Actions workflow runs the backend tests and frontend build.
+
+## Repository layout
+
+```text
+backend/app/ml/    Online QoE model
+backend/app/       FastAPI routes, persistence, metrics, and schemas
+frontend/          React streaming dashboard
+docker-compose.yml PostgreSQL and API services
+```
+
+## Next steps
+
+- Add offline trace replay and comparisons against configurable baseline policies.
+- Add model versioning and rollback for online updates.
+- Add retention and partitioning strategies for high-volume telemetry.
